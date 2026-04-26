@@ -40,9 +40,17 @@ func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 
 	// TODO - review execute
-	if _, err := s.conn.client.Execute(context.TODO(), s.query, params); err != nil {
+	data, err := s.conn.client.Execute(context.TODO(), s.query, params)
+	if err != nil {
 		return nil, err
 	}
 
-	return nil, ErrNotImplemented
+	rows, err := newRows(data)
+	if err != nil {
+		return nil, err
+	}
+
+	s.conn.logger.Debug("Received results", "columns", rows.columns, "results", rows.data)
+
+	return rows, nil
 }

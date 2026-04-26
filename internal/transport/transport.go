@@ -46,6 +46,9 @@ func (c *Client) Execute(ctx context.Context, sql string, args []any) ([]byte, e
 		return nil, err
 	}
 
+	logger := c.logger.With("client_id", os.Getenv("CF_ACCESS_CLIENT_ID"))
+	logger.Debug("Making request to transport proxy", "url", c.ProxyURL)
+
 	req.Header.Set("CF_ACCESS_CLIENT_ID", os.Getenv("CF_ACCESS_CLIENT_ID"))
 	req.Header.Set("CF_ACCESS_CLIENT_SECRET", os.Getenv("CF_ACCESS_CLIENT_SECRET"))
 	req.Header.Set("Content-Type", "application/json")
@@ -57,7 +60,8 @@ func (c *Client) Execute(ctx context.Context, sql string, args []any) ([]byte, e
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("proxy error")
+		// todo - better error handling here
+		return nil, errors.New("unexpected status code: " + resp.Status)
 	}
 
 	return io.ReadAll(resp.Body)

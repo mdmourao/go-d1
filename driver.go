@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"os"
 
 	"github.com/mdmourao/go-d1/internal/transport"
 )
@@ -50,7 +51,9 @@ func (d *Driver) Open(name string) (driver.Conn, error) {
 	debug := q.Get("debug")
 	// TODO - better parsing?
 	if debug == "1" || debug == "true" {
-		logger = slog.Default()
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}))
 	}
 
 	q.Del("token")

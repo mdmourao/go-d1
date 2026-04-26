@@ -49,8 +49,8 @@ func (c *Client) Execute(ctx context.Context, sql string, args []any) ([]byte, e
 	logger := c.logger.With("client_id", os.Getenv("CF_ACCESS_CLIENT_ID"))
 	logger.Debug("Making request to transport proxy", "url", c.ProxyURL)
 
-	req.Header.Set("CF_ACCESS_CLIENT_ID", os.Getenv("CF_ACCESS_CLIENT_ID"))
-	req.Header.Set("CF_ACCESS_CLIENT_SECRET", os.Getenv("CF_ACCESS_CLIENT_SECRET"))
+	req.Header.Set("CF-Access-Client-Id", os.Getenv("CF_ACCESS_CLIENT_ID"))
+	req.Header.Set("CF-Access-Client-Secret", os.Getenv("CF_ACCESS_CLIENT_SECRET"))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HTTP.Do(req)

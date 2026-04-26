@@ -42,11 +42,6 @@ func (d *Driver) Open(name string) (driver.Conn, error) {
 	}
 
 	q := u.Query()
-	token := q.Get("token")
-	if token == "" {
-		logger.Error("invalid DSN: missing token (use ?token=...)")
-		return nil, errors.New("invalid DSN: missing token (use ?token=...)")
-	}
 
 	debug := q.Get("debug")
 	// TODO - better parsing?
@@ -56,11 +51,7 @@ func (d *Driver) Open(name string) (driver.Conn, error) {
 		}))
 	}
 
-	q.Del("token")
-	u.User = nil
-	u.RawQuery = q.Encode()
-
-	client := transport.NewClient(u.String(), token, logger)
+	client := transport.NewClient(u.String(), logger)
 
 	logger.Debug("Opening connection", "dsn", u.String())
 	return &Conn{

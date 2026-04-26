@@ -8,20 +8,19 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 )
 
 type Client struct {
 	ProxyURL string
-	Token    string
 	logger   *slog.Logger
 	HTTP     *http.Client
 }
 
-func NewClient(url, token string, logger *slog.Logger) *Client {
+func NewClient(url string, logger *slog.Logger) *Client {
 	return &Client{
 		ProxyURL: url,
-		Token:    token,
 		HTTP: &http.Client{
 			// TODO make this configurable?
 			Timeout: 15 * time.Second,
@@ -47,7 +46,8 @@ func (c *Client) Execute(ctx context.Context, sql string, args []any) ([]byte, e
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("CF_ACCESS_CLIENT_ID", os.Getenv("CF_ACCESS_CLIENT_ID"))
+	req.Header.Set("CF_ACCESS_CLIENT_SECRET", os.Getenv("CF_ACCESS_CLIENT_SECRET"))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HTTP.Do(req)

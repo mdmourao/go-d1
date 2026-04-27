@@ -3,7 +3,7 @@ package transport
 type Payload struct {
 	SQL    string `json:"sql"`
 	Args   []any  `json:"args"`
-	IsExec bool   `json:"is_exec"`
+	IsExec bool   `json:"isExec"`
 }
 
 // response

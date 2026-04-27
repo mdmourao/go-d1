@@ -29,13 +29,7 @@ func NewClient(url string, logger *slog.Logger) *Client {
 	}
 }
 
-func (c *Client) Execute(ctx context.Context, sql string, args []any) ([]byte, error) {
-	c.logger.Debug("Client.Execute called", "sql", sql, "args", args)
-	payload := Payload{
-		SQL:  sql,
-		Args: args,
-	}
-
+func (c *Client) do(ctx context.Context, payload Payload) ([]byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -46,10 +40,10 @@ func (c *Client) Execute(ctx context.Context, sql string, args []any) ([]byte, e
 		return nil, err
 	}
 
-	logger := c.logger.With("client_id", os.Getenv("CF_ACCESS_CLIENT_ID"))
-	logger.Debug("Making request to transport proxy", "url", c.ProxyURL)
+	clientID := os.Getenv("CF_ACCESS_CLIENT_ID")
+	c.logger.With("client_id", clientID).Debug("Making request to transport proxy", "url", c.ProxyURL)
 
-	req.Header.Set("CF-Access-Client-Id", os.Getenv("CF_ACCESS_CLIENT_ID"))
+	req.Header.Set("CF-Access-Client-Id", clientID)
 	req.Header.Set("CF-Access-Client-Secret", os.Getenv("CF_ACCESS_CLIENT_SECRET"))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -65,4 +59,29 @@ func (c *Client) Execute(ctx context.Context, sql string, args []any) ([]byte, e
 	}
 
 	return io.ReadAll(resp.Body)
+}
+
+// TODO - handle return?
+func (c *Client) Query(ctx context.Context, sql string, args []any) ([]byte, error) {
+	// TODO - review logging
+	c.logger.Debug("Client.Query called", "sql", sql, "args", args)
+	return c.do(ctx, Payload{SQL: sql, Args: args})
+}
+
+func (c *Client) Exec(ctx context.Context, sql string, args []any) (Response, error) {
+	c.logger.Debug("Client.Exec called", "sql", sql, "args", args)
+
+	body, err := c.do(ctx, Payload{SQL: sql, Args: args, IsExec: true})
+	if err != nil {
+		return Response{}, err
+	}
+
+	var response Response
+	if err := json.Unmarshal(body, &response); err != nil {
+		return Response{}, err
+	}
+
+	c.logger.Debug("Received response from transport proxy", "response", response)
+
+	return response, nil
 }

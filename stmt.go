@@ -29,7 +29,27 @@ func (s *Stmt) NumInput() int {
 
 // INSERT, UPDATE, DELETE
 func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
-	return nil, ErrNotImplemented
+	s.conn.logger.Debug("Exec called", "query", s.query, "args", args)
+
+	// TODO - review parsing
+	params := make([]any, len(args))
+	for i, v := range args {
+		params[i] = v
+	}
+
+	// TODO - review execute
+	response, err := s.conn.client.Exec(context.TODO(), s.query, params)
+	if err != nil {
+		// TODO - error handling
+		return nil, err
+	}
+
+	s.conn.logger.Debug("Received response", "response", response)
+
+	return &Result{
+		rowsAffected: response.Changes,
+		lastInsertId: response.LastRowID,
+	}, nil
 }
 
 // SELECT
@@ -55,8 +75,9 @@ func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 
 	// TODO - review execute
-	data, err := s.conn.client.Execute(context.TODO(), s.query, params)
+	data, err := s.conn.client.Query(context.TODO(), s.query, params)
 	if err != nil {
+		// TODO - error handling
 		return nil, err
 	}
 

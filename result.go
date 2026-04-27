@@ -7,12 +7,15 @@ import "database/sql/driver"
 
 var _ driver.Result = (*Result)(nil)
 
-type Result struct{}
+type Result struct {
+	rowsAffected int64
+	lastInsertId int64
+}
 
 func (r *Result) RowsAffected() (int64, error) {
-	return 0, ErrNotImplemented
+	return r.rowsAffected, nil
 }
 
 func (r *Result) LastInsertId() (int64, error) {
-	return 0, ErrNotImplemented
+	return r.lastInsertId, nil
 }

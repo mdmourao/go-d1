@@ -10,7 +10,9 @@ import (
 // https://pkg.go.dev/database/sql/driver#Conn
 // driver.Conn
 
-var _ driver.Conn = (*Conn)(nil)
+var (
+	_ driver.Conn = (*Conn)(nil)
+)
 
 type Conn struct {
 	client *transport.Client
@@ -28,6 +30,7 @@ func (c *Conn) Close() error {
 	return nil
 }
 
+// TODO Deprecated
 func (c *Conn) Begin() (driver.Tx, error) {
-	return nil, ErrNotSupported
+	return Tx{}, nil
 }

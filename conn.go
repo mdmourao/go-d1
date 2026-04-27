@@ -25,9 +25,9 @@ func (c *Conn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (c *Conn) Close() error {
-	return ErrNotImplemented
+	return nil
 }
 
 func (c *Conn) Begin() (driver.Tx, error) {
-	return nil, ErrNotImplemented
+	return nil, ErrNotSupported
 }

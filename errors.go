@@ -3,5 +3,5 @@ package god1
 import "errors"
 
 var (
-	ErrNotSupported = errors.New("not supported")
+	ErrTransactionsNotSupported = errors.New("transactions not supported")
 )

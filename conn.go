@@ -30,7 +30,6 @@ func (c *Conn) Close() error {
 	return nil
 }
 
-// TODO Deprecated
 func (c *Conn) Begin() (driver.Tx, error) {
-	return Tx{}, nil
+	return Tx{}, ErrTransactionsNotSupported
 }

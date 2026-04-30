@@ -18,12 +18,11 @@ type Client struct {
 	HTTP     *http.Client
 }
 
-func NewClient(url string, logger *slog.Logger) *Client {
+func NewClient(url string, logger *slog.Logger, timeout time.Duration) *Client {
 	return &Client{
 		ProxyURL: url,
 		HTTP: &http.Client{
-			// TODO make this configurable?
-			Timeout: 15 * time.Second,
+			Timeout: timeout,
 		},
 		logger: logger,
 	}

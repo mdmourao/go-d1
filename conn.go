@@ -15,8 +15,9 @@ var (
 )
 
 type Conn struct {
-	client *transport.Client
-	logger *slog.Logger
+	client        *transport.Client
+	logger        *slog.Logger
+	sqliteVersion string
 }
 
 func (c *Conn) Prepare(query string) (driver.Stmt, error) {

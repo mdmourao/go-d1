@@ -1,11 +1,13 @@
 package god1
 
 import (
-	"bytes"
 	"database/sql/driver"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"strconv"
+
+	"github.com/buger/jsonparser"
 )
 
 // https://pkg.go.dev/database/sql/driver#Rows
@@ -14,67 +16,104 @@ import (
 var _ driver.Rows = (*Rows)(nil)
 
 type Rows struct {
-	data    []map[string]any
+	data    [][]driver.Value
 	columns []string
 	index   int
 }
 
 // newRows decodes a JSON array of row objects, recovering the column
-// order from the first row's raw JSON since unmarshalling into
-// map[string]any loses key order.
+// order from the first row's raw JSON
+// jsonparser promisses big performance with a smaller memory footprint
 func newRows(data []byte) (*Rows, error) {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
+	var columns []string
+
+	firstObj, dataType, _, err := jsonparser.Get(data, "[0]")
+	if err != nil {
+		if err == jsonparser.KeyPathNotFoundError {
+			return &Rows{}, nil
+		}
 		return nil, err
 	}
-	if len(raw) == 0 {
-		return &Rows{}, nil
+
+	if dataType != jsonparser.Object {
+		return nil, fmt.Errorf("expected object at index 0, got %v", dataType)
 	}
 
-	columns, err := jsonObjectKeys(raw[0])
+	err = jsonparser.ObjectEach(firstObj, func(key []byte, value []byte, dt jsonparser.ValueType, offset int) error {
+		columns = append(columns, string(key))
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	rows := make([]map[string]any, len(raw))
-	for i, r := range raw {
-		if err := json.Unmarshal(r, &rows[i]); err != nil {
-			return nil, err
+	var rows [][]driver.Value
+	var parseErr error
+
+	_, err = jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		if parseErr != nil {
+			return
 		}
+		if err != nil {
+			parseErr = err
+			return
+		}
+
+		row := make([]driver.Value, len(columns))
+
+		for i, col := range columns {
+			valBytes, valType, _, valErr := jsonparser.Get(value, col)
+
+			if errors.Is(valErr, jsonparser.KeyPathNotFoundError) {
+				row[i] = nil
+				continue
+			} else if valErr != nil {
+				parseErr = valErr
+				return
+			}
+
+			row[i], parseErr = parseJsonValue(valBytes, valType)
+			if parseErr != nil {
+				return
+			}
+		}
+
+		rows = append(rows, row)
+	})
+
+	if err != nil {
+		return nil, err
 	}
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
 	return &Rows{data: rows, columns: columns}, nil
 }
 
-// TODO - tests and review
-// jsonObjectKeys returns the keys of a JSON object in source order.
-func jsonObjectKeys(data []byte) ([]string, error) {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if _, err := dec.Token(); err != nil { // opening '{'
-		return nil, err
+func parseJsonValue(b []byte, t jsonparser.ValueType) (driver.Value, error) {
+	switch t {
+	case jsonparser.String:
+		return jsonparser.ParseString(b)
+	case jsonparser.Number:
+		if i, err := strconv.ParseInt(string(b), 10, 64); err == nil {
+			return i, nil
+		}
+		return strconv.ParseFloat(string(b), 64)
+	case jsonparser.Boolean:
+		return jsonparser.ParseBoolean(b)
+	case jsonparser.Null:
+		return nil, nil
+	case jsonparser.Array, jsonparser.Object:
+		out := make([]byte, len(b))
+		copy(out, b)
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unsupported JSON value type: %v", t)
 	}
-	var keys []string
-	for dec.More() {
-		t, err := dec.Token()
-		if err != nil {
-			return nil, err
-		}
-		key, ok := t.(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string key, got %v", t)
-		}
-		keys = append(keys, key)
-		var skip json.RawMessage
-		if err := dec.Decode(&skip); err != nil {
-			return nil, err
-		}
-	}
-	return keys, nil
 }
 
 func (r *Rows) Columns() []string {
-	if r.columns == nil {
-		return []string{}
-	}
 	return r.columns
 }
 
@@ -83,14 +122,11 @@ func (r *Rows) Close() error {
 }
 
 func (r *Rows) Next(dest []driver.Value) error {
-	if len(r.data) == 0 || len(r.columns) == 0 || r.index >= len(r.data) {
+	if r.index >= len(r.data) {
 		return io.EOF
 	}
 
-	row := r.data[r.index]
-	for i, col := range r.columns {
-		dest[i] = row[col]
-	}
+	copy(dest, r.data[r.index])
 
 	r.index++
 	return nil

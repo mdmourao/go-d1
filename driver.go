@@ -1,21 +1,16 @@
 package god1
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"fmt"
-	"io"
-	"log/slog"
 	"net/url"
-	"os"
-
-	"github.com/mdmourao/go-d1/internal/transport"
 )
 
-func init() {
-	sql.Register("god1", &Driver{})
-}
+var defaultDriver = &Driver{}
+
+func init() { sql.Register("god1", defaultDriver) }
 
 // https://pkg.go.dev/database/sql/driver#Driver
 // driver.Driver
@@ -25,37 +20,33 @@ var _ driver.Driver = (*Driver)(nil)
 type Driver struct{}
 
 func (d *Driver) Open(name string) (driver.Conn, error) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	u, err := url.Parse(name)
+	c, err := NewConnector(name)
 	if err != nil {
-		logger.Error("invalid DSN", "error", err)
-		return nil, fmt.Errorf("invalid DSN: %w", err)
+		return nil, err
+	}
+	return c.Connect(context.Background())
+}
+
+// allow drivers access to context and to avoid repeated parsing of driver configuration
+func (d *Driver) OpenConnector(name string) (driver.Connector, error) {
+	return NewConnector(name)
+}
+
+func parseDSN(dsn string) (*url.URL, error) {
+	if dsn == "" {
+		return nil, ErrDriverMissingDSN
+	}
+
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrDriverInvalidDSN, err)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		logger.Error("invalid DSN: scheme must be http or https", "scheme", u.Scheme)
-		return nil, errors.New("invalid DSN: scheme must be http or https")
+		return nil, ErrDriverInvalidDSNScheme
 	}
 	if u.Host == "" {
-		logger.Error("invalid DSN: missing host")
-		return nil, errors.New("invalid DSN: missing host")
+		return nil, ErrDriverInvalidDSNHost
 	}
 
-	q := u.Query()
-
-	debug := q.Get("debug")
-	// TODO - better parsing?
-	if debug == "1" || debug == "true" {
-		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		}))
-	}
-
-	client := transport.NewClient(u.String(), logger)
-
-	logger.Debug("Opening connection", "dsn", u.String())
-	return &Conn{
-		client: client,
-		logger: logger,
-	}, nil
+	return u, nil
 }

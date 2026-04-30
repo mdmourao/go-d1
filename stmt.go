@@ -3,16 +3,20 @@ package god1
 import (
 	"context"
 	"database/sql/driver"
-	"strings"
+	"fmt"
+	"regexp"
 )
-
-// TODO - make this configurable?
-const d1ReportedSQLiteVersion = "3.53.0"
 
 // https://pkg.go.dev/database/sql/driver#Stmt
 // driver.Stmt
 
-var _ driver.Stmt = (*Stmt)(nil)
+var (
+	_ driver.Stmt             = (*Stmt)(nil)
+	_ driver.StmtExecContext  = (*Stmt)(nil)
+	_ driver.StmtQueryContext = (*Stmt)(nil)
+
+	sqliteVersionProbeRe = regexp.MustCompile(`(?i)^\s*SELECT\s+sqlite_version\(\)\s*(?:AS\s+\w+)?\s*;?\s*$`)
+)
 
 type Stmt struct {
 	query string
@@ -29,22 +33,27 @@ func (s *Stmt) NumInput() int {
 
 // INSERT, UPDATE, DELETE
 func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
-	s.conn.logger.Debug("Exec called", "query", s.query, "args", args)
-
-	// TODO - review parsing
-	params := make([]any, len(args))
+	namedArgs := make([]driver.NamedValue, len(args))
 	for i, v := range args {
-		params[i] = v
+		namedArgs[i] = driver.NamedValue{Ordinal: i + 1, Value: v}
 	}
+	return s.ExecContext(context.Background(), namedArgs)
+}
 
-	// TODO - review execute
-	response, err := s.conn.client.Exec(context.TODO(), s.query, params)
+func (s *Stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	s.conn.logger.Debug("exec context called", "query", s.query, "args", args)
+
+	params, err := buildParams(args)
 	if err != nil {
-		// TODO - error handling
 		return nil, err
 	}
 
-	s.conn.logger.Debug("Received response", "response", response)
+	response, err := s.conn.client.Exec(ctx, s.query, params)
+	if err != nil {
+		return nil, err
+	}
+
+	s.conn.logger.Debug("received response", "response", response)
 
 	return &Result{
 		rowsAffected: response.Changes,
@@ -53,40 +62,58 @@ func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 }
 
 // SELECT
-// TODO Deprecated
 func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
-	s.conn.logger.Debug("Query called", "query", s.query, "args", args)
+	namedArgs := make([]driver.NamedValue, len(args))
+	for i, v := range args {
+		namedArgs[i] = driver.NamedValue{Ordinal: i + 1, Value: v}
+	}
+	return s.QueryContext(context.Background(), namedArgs)
+}
 
-	// TODO - best way to detect this?
-	if strings.Contains(s.query, "sqlite_version()") {
-		s.conn.logger.Debug("Intercepted sqlite_version() probe", "version", d1ReportedSQLiteVersion)
+func (s *Stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	s.conn.logger.Debug("query context called", "query", s.query, "args", args)
+
+	if sqliteVersionProbeRe.MatchString(s.query) {
+		s.conn.logger.Debug("intercepted sqlite_version() probe, returning mock version")
 		return &Rows{
 			columns: []string{"sqlite_version()"},
-			data: []map[string]any{
-				{"sqlite_version()": d1ReportedSQLiteVersion},
+			data: [][]driver.Value{
+				{s.conn.sqliteVersion},
 			},
 		}, nil
 	}
 
-	// TODO - review parsing
-	params := make([]any, len(args))
-	for i, v := range args {
-		params[i] = v
-	}
-
-	// TODO - review execute
-	data, err := s.conn.client.Query(context.TODO(), s.query, params)
-	if err != nil {
-		// TODO - error handling
-		return nil, err
-	}
-
-	rows, err := newRows(data)
+	params, err := buildParams(args)
 	if err != nil {
 		return nil, err
 	}
 
-	s.conn.logger.Debug("Received results", "columns", rows.columns, "results", rows.data)
+	response, err := s.conn.client.Query(ctx, s.query, params)
+	if err != nil {
+		return nil, err
+	}
+
+	s.conn.logger.Debug("received response", "response", response)
+
+	rows, err := newRows(response)
+	if err != nil {
+		return nil, err
+	}
 
 	return rows, nil
+}
+
+func buildParams(args []driver.NamedValue) ([]any, error) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+
+	params := make([]any, len(args))
+	for i, arg := range args {
+		if arg.Name != "" {
+			return nil, fmt.Errorf("named parameters are not supported")
+		}
+		params[i] = arg.Value
+	}
+	return params, nil
 }

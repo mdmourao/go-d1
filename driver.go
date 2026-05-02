@@ -8,18 +8,18 @@ import (
 	"net/url"
 )
 
-var defaultDriver = &Driver{}
+var defaultDriver = &d1Driver{}
 
 func init() { sql.Register("god1", defaultDriver) }
 
 // https://pkg.go.dev/database/sql/driver#Driver
 // driver.Driver
 
-var _ driver.Driver = (*Driver)(nil)
+var _ driver.Driver = (*d1Driver)(nil)
 
-type Driver struct{}
+type d1Driver struct{}
 
-func (d *Driver) Open(name string) (driver.Conn, error) {
+func (d *d1Driver) Open(name string) (driver.Conn, error) {
 	c, err := NewConnector(name)
 	if err != nil {
 		return nil, err
@@ -28,7 +28,7 @@ func (d *Driver) Open(name string) (driver.Conn, error) {
 }
 
 // allow drivers access to context and to avoid repeated parsing of driver configuration
-func (d *Driver) OpenConnector(name string) (driver.Connector, error) {
+func (d *d1Driver) OpenConnector(name string) (driver.Connector, error) {
 	return NewConnector(name)
 }
 

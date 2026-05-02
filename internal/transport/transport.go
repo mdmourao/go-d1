@@ -8,23 +8,26 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 )
 
 type Client struct {
-	ProxyURL string
-	logger   *slog.Logger
-	HTTP     *http.Client
+	proxyURL             string
+	logger               *slog.Logger
+	httpClient           *http.Client
+	cfAccessClientID     string
+	cfAccessClientSecret string
 }
 
-func NewClient(url string, logger *slog.Logger, timeout time.Duration) *Client {
+func NewClient(url string, logger *slog.Logger, timeout time.Duration, cfAccessClientID, cfAccessClientSecret string) *Client {
 	return &Client{
-		ProxyURL: url,
-		HTTP: &http.Client{
+		proxyURL: url,
+		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		logger: logger,
+		logger:               logger,
+		cfAccessClientID:     cfAccessClientID,
+		cfAccessClientSecret: cfAccessClientSecret,
 	}
 }
 
@@ -34,42 +37,35 @@ func (c *Client) do(ctx context.Context, payload Payload) ([]byte, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.ProxyURL, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.proxyURL, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 
-	clientID := os.Getenv("CF_ACCESS_CLIENT_ID")
-	c.logger.With("client_id", clientID).Debug("Making request to transport proxy", "url", c.ProxyURL)
-
-	req.Header.Set("CF-Access-Client-Id", clientID)
-	req.Header.Set("CF-Access-Client-Secret", os.Getenv("CF_ACCESS_CLIENT_SECRET"))
+	if c.cfAccessClientID != "" && c.cfAccessClientSecret != "" {
+		req.Header.Set("CF-Access-Client-Id", c.cfAccessClientID)
+		req.Header.Set("CF-Access-Client-Secret", c.cfAccessClientSecret)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// todo - better error handling here
 		return nil, errors.New("unexpected status code: " + resp.Status)
 	}
 
 	return io.ReadAll(resp.Body)
 }
 
-// TODO - handle return?
 func (c *Client) Query(ctx context.Context, sql string, args []any) ([]byte, error) {
-	// TODO - review logging
-	c.logger.Debug("Client.Query called", "sql", sql, "args", args)
 	return c.do(ctx, Payload{SQL: sql, Args: args})
 }
 
 func (c *Client) Exec(ctx context.Context, sql string, args []any) (Response, error) {
-	c.logger.Debug("Client.Exec called", "sql", sql, "args", args)
-
 	body, err := c.do(ctx, Payload{SQL: sql, Args: args, IsExec: true})
 	if err != nil {
 		return Response{}, err
@@ -80,7 +76,10 @@ func (c *Client) Exec(ctx context.Context, sql string, args []any) (Response, er
 		return Response{}, err
 	}
 
-	c.logger.Debug("Received response from transport proxy", "response", response)
-
 	return response, nil
+}
+
+func (c *Client) Ping(ctx context.Context) error {
+	_, err := c.Query(ctx, "SELECT 1", nil)
+	return err
 }

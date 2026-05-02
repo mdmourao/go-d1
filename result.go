@@ -5,17 +5,17 @@ import "database/sql/driver"
 // https://pkg.go.dev/database/sql/driver#Result
 // driver.Result
 
-var _ driver.Result = (*Result)(nil)
+var _ driver.Result = (*result)(nil)
 
-type Result struct {
+type result struct {
 	rowsAffected int64
 	lastInsertId int64
 }
 
-func (r *Result) RowsAffected() (int64, error) {
+func (r *result) RowsAffected() (int64, error) {
 	return r.rowsAffected, nil
 }
 
-func (r *Result) LastInsertId() (int64, error) {
+func (r *result) LastInsertId() (int64, error) {
 	return r.lastInsertId, nil
 }

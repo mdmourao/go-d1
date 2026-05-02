@@ -19,9 +19,11 @@ const defaultSQLiteVersion = "3.53.0"
 type Option func(*config) error
 
 type config struct {
-	logger        *slog.Logger
-	clientTimeout time.Duration
-	sqliteVersion string
+	logger               *slog.Logger
+	clientTimeout        time.Duration
+	sqliteVersion        string
+	cfAccessClientID     string
+	cfAccessClientSecret string
 }
 
 func WithLogger(l *slog.Logger) Option {
@@ -33,12 +35,19 @@ func WithLogger(l *slog.Logger) Option {
 	}
 }
 
-// TODO - consider other timeouts? WithDialTimeout?
 func WithRequestTimeout(t time.Duration) Option {
 	return func(c *config) error {
 		if t > 0 {
 			c.clientTimeout = t
 		}
+		return nil
+	}
+}
+
+func WithCloudflareAccess(clientID, clientSecret string) Option {
+	return func(c *config) error {
+		c.cfAccessClientID = clientID
+		c.cfAccessClientSecret = clientSecret
 		return nil
 	}
 }
@@ -71,7 +80,7 @@ func NewConnector(dsn string, opts ...Option) (driver.Connector, error) {
 	}
 
 	return &connector{
-		client:        transport.NewClient(u.String(), cfg.logger, cfg.clientTimeout),
+		client:        transport.NewClient(u.String(), cfg.logger, cfg.clientTimeout, cfg.cfAccessClientID, cfg.cfAccessClientSecret),
 		logger:        cfg.logger,
 		sqliteVersion: cfg.sqliteVersion,
 	}, nil
@@ -85,12 +94,11 @@ type connector struct {
 	sqliteVersion string
 }
 
-// TODO - implement a ping and use context in Connect?
 func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return &Conn{client: c.client, logger: c.logger, sqliteVersion: c.sqliteVersion}, nil
+	return &conn{client: c.client, logger: c.logger, sqliteVersion: c.sqliteVersion}, nil
 }
 
 func (c *connector) Driver() driver.Driver { return defaultDriver }

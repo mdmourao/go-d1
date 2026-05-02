@@ -1,8 +1,8 @@
 package god1
 
 import (
+	"bytes"
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -13,82 +13,56 @@ import (
 // https://pkg.go.dev/database/sql/driver#Rows
 // driver.Rows
 
-var _ driver.Rows = (*Rows)(nil)
+var _ driver.Rows = (*rows)(nil)
 
-type Rows struct {
+type rows struct {
 	data    [][]driver.Value
 	columns []string
 	index   int
 }
 
-// newRows decodes a JSON array of row objects, recovering the column
-// order from the first row's raw JSON
+// newRows decodes a JSON array of row objects
 // jsonparser promisses big performance with a smaller memory footprint
-func newRows(data []byte) (*Rows, error) {
+func newRows(data []byte) (*rows, error) {
 	var columns []string
-
-	firstObj, dataType, _, err := jsonparser.Get(data, "[0]")
-	if err != nil {
-		if err == jsonparser.KeyPathNotFoundError {
-			return &Rows{}, nil
-		}
-		return nil, err
-	}
-
-	if dataType != jsonparser.Object {
-		return nil, fmt.Errorf("expected object at index 0, got %v", dataType)
-	}
-
-	err = jsonparser.ObjectEach(firstObj, func(key []byte, value []byte, dt jsonparser.ValueType, offset int) error {
-		columns = append(columns, string(key))
-		return nil
-	})
+	_, err := jsonparser.ArrayEach(data, func(v []byte, _ jsonparser.ValueType, _ int, _ error) {
+		s, _ := jsonparser.ParseString(v)
+		columns = append(columns, s)
+	}, "columns")
 	if err != nil {
 		return nil, err
 	}
 
-	var rows [][]driver.Value
+	var rowsData [][]driver.Value
 	var parseErr error
-
-	_, err = jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+	_, err = jsonparser.ArrayEach(data, func(rowVal []byte, _ jsonparser.ValueType, _ int, _ error) {
 		if parseErr != nil {
 			return
 		}
-		if err != nil {
-			parseErr = err
-			return
-		}
-
-		row := make([]driver.Value, len(columns))
-
-		for i, col := range columns {
-			valBytes, valType, _, valErr := jsonparser.Get(value, col)
-
-			if errors.Is(valErr, jsonparser.KeyPathNotFoundError) {
-				row[i] = nil
-				continue
-			} else if valErr != nil {
-				parseErr = valErr
-				return
-			}
-
-			row[i], parseErr = parseJsonValue(valBytes, valType)
+		row := make([]driver.Value, 0, len(columns))
+		_, e := jsonparser.ArrayEach(rowVal, func(cell []byte, t jsonparser.ValueType, _ int, _ error) {
 			if parseErr != nil {
 				return
 			}
+			v, perr := parseJsonValue(cell, t)
+			if perr != nil {
+				parseErr = perr
+				return
+			}
+			row = append(row, v)
+		})
+		if e != nil && parseErr == nil {
+			parseErr = e
 		}
-
-		rows = append(rows, row)
-	})
-
+		rowsData = append(rowsData, row)
+	}, "rows")
 	if err != nil {
 		return nil, err
 	}
 	if parseErr != nil {
 		return nil, parseErr
 	}
-
-	return &Rows{data: rows, columns: columns}, nil
+	return &rows{columns: columns, data: rowsData}, nil
 }
 
 func parseJsonValue(b []byte, t jsonparser.ValueType) (driver.Value, error) {
@@ -96,32 +70,29 @@ func parseJsonValue(b []byte, t jsonparser.ValueType) (driver.Value, error) {
 	case jsonparser.String:
 		return jsonparser.ParseString(b)
 	case jsonparser.Number:
-		if i, err := strconv.ParseInt(string(b), 10, 64); err == nil {
-			return i, nil
+		s := string(b)
+		if !bytes.ContainsAny(b, ".eE") {
+			return strconv.ParseInt(s, 10, 64)
 		}
-		return strconv.ParseFloat(string(b), 64)
+		return strconv.ParseFloat(s, 64)
 	case jsonparser.Boolean:
 		return jsonparser.ParseBoolean(b)
 	case jsonparser.Null:
 		return nil, nil
-	case jsonparser.Array, jsonparser.Object:
-		out := make([]byte, len(b))
-		copy(out, b)
-		return out, nil
 	default:
 		return nil, fmt.Errorf("unsupported JSON value type: %v", t)
 	}
 }
 
-func (r *Rows) Columns() []string {
+func (r *rows) Columns() []string {
 	return r.columns
 }
 
-func (r *Rows) Close() error {
+func (r *rows) Close() error {
 	return nil
 }
 
-func (r *Rows) Next(dest []driver.Value) error {
+func (r *rows) Next(dest []driver.Value) error {
 	if r.index >= len(r.data) {
 		return io.EOF
 	}

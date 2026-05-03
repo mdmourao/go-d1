@@ -4,6 +4,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/mdmourao/go-d1)](https://goreportcard.com/report/github.com/mdmourao/go-d1)
 [![Status: Beta](https://img.shields.io/badge/status-beta-orange.svg)](#project-status)
 
+[![Code Quality & Security Check](https://github.com/mdmourao/go-d1/actions/workflows/code-quality.yml/badge.svg)](https://github.com/mdmourao/go-d1/actions/workflows/code-quality.yml)
+[![Test Suite](https://github.com/mdmourao/go-d1/actions/workflows/test.yml/badge.svg)](https://github.com/mdmourao/go-d1/actions/workflows/test.yml)
+
 A Go [`database/sql`](https://pkg.go.dev/database/sql) driver for [Cloudflare D1](https://developers.cloudflare.com/d1/), the serverless SQLite database on Cloudflare's edge.
 
 Part of the [orangegopher.dev](https://orangegopher.dev) project — because JavaScript and TypeScript are cool, but Go has a mascot. 

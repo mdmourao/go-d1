@@ -11,4 +11,7 @@ var (
 	ErrDriverMissingDSN            = errors.New("missing DSN")
 	ErrDriverInvalidDSNScheme      = errors.New("invalid DSN: scheme must be http or https")
 	ErrDriverInvalidDSNHost        = errors.New("invalid DSN: missing host")
+	ErrColumns                     = errors.New("columns not valid or missing")
+	ErrRows                        = errors.New("rows not valid or missing")
+	ErrParseRows                   = errors.New("error parsing rows")
 )

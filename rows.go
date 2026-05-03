@@ -30,7 +30,7 @@ func newRows(data []byte) (*rows, error) {
 		columns = append(columns, s)
 	}, "columns")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrColumns, err)
 	}
 
 	var rowsData [][]driver.Value
@@ -54,13 +54,17 @@ func newRows(data []byte) (*rows, error) {
 		if e != nil && parseErr == nil {
 			parseErr = e
 		}
+		if len(row) != len(columns) {
+			parseErr = fmt.Errorf("expected %d columns, got %d", len(columns), len(row))
+			return
+		}
 		rowsData = append(rowsData, row)
 	}, "rows")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrRows, err)
 	}
 	if parseErr != nil {
-		return nil, parseErr
+		return nil, fmt.Errorf("%w: %v", ErrParseRows, parseErr)
 	}
 	return &rows{columns: columns, data: rowsData}, nil
 }

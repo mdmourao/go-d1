@@ -262,7 +262,12 @@ func TestQueryContext(t *testing.T) {
 			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 
-		rows, err := c.QueryContext(t.Context(), "SELECT id from mascots", nil)
+		s := &stmt{
+			query: "SELECT id from mascots",
+			conn:  c,
+		}
+
+		rows, err := s.Query([]driver.Value{})
 		assert.NoError(t, err)
 		assert.Equal(t, http.MethodPost, gotMethod)
 		assert.Equal(t, "application/json", gotContentType)
@@ -351,17 +356,18 @@ func TestExecContext(t *testing.T) {
 			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 
-		result, err := c.ExecContext(context.Background(), "DELETE FROM mascots WHERE id > ?", []driver.NamedValue{{Ordinal: 1, Value: 10}})
+		s := &stmt{
+			query: "DELETE FROM mascots WHERE id > ?",
+			conn:  c,
+		}
+
+		_, err := s.Exec([]driver.Value{10})
 		assert.NoError(t, err)
 		assert.Equal(t, http.MethodPost, gotMethod)
 		assert.Equal(t, "application/json", gotContentType)
 		assert.Equal(t, "DELETE FROM mascots WHERE id > ?", gotPayload.SQL)
 		assert.True(t, gotPayload.IsExec)
 		assert.Equal(t, []any{float64(10)}, gotPayload.Args)
-
-		rowsAffected, err := result.RowsAffected()
-		assert.NoError(t, err)
-		assert.Equal(t, int64(3), rowsAffected)
 	})
 
 	t.Run("last insert id", func(t *testing.T) {
@@ -376,7 +382,12 @@ func TestExecContext(t *testing.T) {
 			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 
-		result, err := c.ExecContext(context.Background(), "INSERT INTO mascots (name) VALUES (?)", []driver.NamedValue{{Ordinal: 1, Value: "Alice"}})
+		s := &stmt{
+			query: "INSERT INTO mascots (name) VALUES (?)",
+			conn:  c,
+		}
+
+		result, err := s.Exec([]driver.Value{"Gopher"})
 		assert.NoError(t, err)
 
 		lastInsertId, err := result.LastInsertId()

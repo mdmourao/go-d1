@@ -108,5 +108,4 @@ func TestDriver(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
 	assert.NotNil(t, c.Driver())
-
 }

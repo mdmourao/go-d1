@@ -52,7 +52,11 @@ func (c *Client) do(ctx context.Context, payload Payload) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.logger.Warn("failed to close response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("unexpected status code: " + resp.Status)

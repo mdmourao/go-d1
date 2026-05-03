@@ -193,7 +193,7 @@ func TestNext(t *testing.T) {
 	r, err := newRows(data)
 	assert.NoError(t, err)
 
-	var row []driver.Value = make([]driver.Value, len(r.columns))
+	var row = make([]driver.Value, len(r.columns))
 	err = r.Next(row)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), row[0])

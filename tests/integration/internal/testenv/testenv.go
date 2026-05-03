@@ -47,7 +47,7 @@ func findDotEnv() (string, bool) {
 	}
 }
 
-func DSN(t *testing.T) string {
+func DSN(t testing.TB) string {
 	t.Helper()
 	loadDotEnv()
 	dsn := os.Getenv(DSNEnv)
@@ -57,7 +57,7 @@ func DSN(t *testing.T) string {
 	return dsn
 }
 
-func CloudflareAccessCredentials(t *testing.T) (string, string) {
+func CloudflareAccessCredentials(t testing.TB) (string, string) {
 	t.Helper()
 	loadDotEnv()
 	id := os.Getenv(CloudflareAccessClientIDEnv)
@@ -68,7 +68,7 @@ func CloudflareAccessCredentials(t *testing.T) (string, string) {
 	return id, secret
 }
 
-func OpenDB(t *testing.T) *sql.DB {
+func OpenDB(t testing.TB) *sql.DB {
 	t.Helper()
 	dsn := DSN(t)
 	id, secret := CloudflareAccessCredentials(t)

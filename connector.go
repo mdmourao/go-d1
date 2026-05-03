@@ -39,16 +39,22 @@ func WithRequestTimeout(t time.Duration) Option {
 	return func(c *config) error {
 		if t > 0 {
 			c.clientTimeout = t
+			return nil
+		} else {
+			return ErrInvalidRequestTimeout
 		}
-		return nil
 	}
 }
 
 func WithCloudflareAccess(clientID, clientSecret string) Option {
 	return func(c *config) error {
-		c.cfAccessClientID = clientID
-		c.cfAccessClientSecret = clientSecret
-		return nil
+		if clientID != "" && clientSecret != "" {
+			c.cfAccessClientID = clientID
+			c.cfAccessClientSecret = clientSecret
+			return nil
+		} else {
+			return ErrInvalidCloudflareAccessCredentials
+		}
 	}
 }
 
@@ -56,8 +62,18 @@ func WithSQLiteVersion(v string) Option {
 	return func(c *config) error {
 		if v != "" {
 			c.sqliteVersion = v
+			return nil
+		} else {
+			return ErrInvalidSQLiteVersion
 		}
-		return nil
+	}
+}
+
+func newDefaultConfig() *config {
+	return &config{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		clientTimeout: defaultClientTimeout,
+		sqliteVersion: defaultSQLiteVersion,
 	}
 }
 
@@ -67,11 +83,7 @@ func NewConnector(dsn string, opts ...Option) (driver.Connector, error) {
 		return nil, err
 	}
 
-	cfg := &config{
-		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
-		clientTimeout: defaultClientTimeout,
-		sqliteVersion: defaultSQLiteVersion,
-	}
+	cfg := newDefaultConfig()
 
 	for _, opt := range opts {
 		if err := opt(cfg); err != nil {

@@ -7,3 +7,6 @@ coverage:
 
 lint:
 	golangci-lint run
+
+integration:
+	cd tests/integration && go test -v ./...
